@@ -18,7 +18,7 @@ from .agent import AgentState
 from .tools import execute
 
 
-def run_serial(engine, tasks, timer, max_new_tokens: int = 512, max_turns: int = 6):
+def run_serial(engine, tasks, timer, max_new_tokens: int = 512, max_turns: int = 6, replay=None):
     tok = engine.tok
     results, turns = [], []
     for task in tasks:
@@ -27,7 +27,8 @@ def run_serial(engine, tasks, timer, max_new_tokens: int = 512, max_turns: int =
         while not st.done:
             with timer("template"):
                 ids = tok.encode(st.prompt_text(tok), add_special_tokens=False)
-            gen, gstats = engine.generate(ids, max_new_tokens, timer)
+            forced = None if replay is None else replay.get((task["id"], st.turns + 1), [])
+            gen, gstats = engine.generate(ids, max_new_tokens, timer, forced_tokens=forced)
             with timer("detokenize"):
                 text = tok.decode(gen, skip_special_tokens=False)
             call = st.observe(text)

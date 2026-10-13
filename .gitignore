@@ -7,3 +7,11 @@ results/**/torch_trace*.json
 runs/
 scratch/
 .claude/
+
+# Local Ascend environment, model weights, and generated artifacts
+.venv-ascend/
+.build_opp/
+model/
+kernel_meta/
+ge_check_op.json
+results/**/profile_npu/trace/

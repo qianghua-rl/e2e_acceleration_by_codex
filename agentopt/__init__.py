@@ -1,1 +1,1 @@
-MODEL_PATH = "/mnt/data/u/feic/pjs/model/Qwen3.5-27B"
+MODEL_PATH = "/remote-home/S45160/work/e2e_acceleration_by_claude/model/qwen3.5-27b"

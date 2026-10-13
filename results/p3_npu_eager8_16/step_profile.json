@@ -1,0 +1,25 @@
+{
+  "makespan_s": 121.64796033594757,
+  "steps": 422,
+  "parts": {
+    "inside step()": 93.29069280531257,
+    "between steps (host)": 0.093532033264637,
+    "long gaps >50 ms (no live row / stalls)": 21.20481183566153,
+    "before first step": 7.057998270727694,
+    "after last step": 0.0009253909811377525
+  },
+  "per_bucket": {
+    "8": {
+      "steps": 422,
+      "wall_s": 93.29069280531257,
+      "ms_per_step": 221.06799242965064,
+      "replay_ms": null,
+      "fill": 0.6889810426540285
+    }
+  },
+  "forced_row_steps": 0,
+  "live_row_steps": 2326,
+  "critical_task": 76,
+  "critical_start_s": 49.649094870314,
+  "critical_latency_s": 71.99886546563357
+}

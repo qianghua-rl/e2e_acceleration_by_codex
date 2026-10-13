@@ -1,0 +1,98 @@
+{
+  "stage": "p2_npu_eager16slots",
+  "engine": "p2_npu_eager16",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true,
+    "static_cache": false,
+    "num_slots": 16,
+    "max_len": 2048,
+    "compile_decode": false,
+    "gqa_decode_attn": false,
+    "prefix_reuse": false,
+    "force_max": 0,
+    "inplace_state": false,
+    "fp8": null,
+    "buckets": null,
+    "state_dtype": null,
+    "recurrent_launch": null
+  },
+  "runner": "continuous_async",
+  "config": {
+    "engine": "p2_npu_eager16",
+    "runner": "continuous_async",
+    "num_tasks": 16,
+    "data": "gsm8k_128",
+    "exclude_tasks": [
+      423
+    ],
+    "repeats": 1,
+    "max_new_tokens": 256,
+    "max_turns": 6,
+    "device": "npu",
+    "replay": null
+  },
+  "load_s": 35.62514597643167,
+  "makespan_s_all": [
+    86.055917118676
+  ],
+  "makespan_s": 86.055917118676,
+  "tasks": 16,
+  "accuracy": 0.9375,
+  "tasks_per_min": 11.155537377820346,
+  "turns": 31,
+  "tool_calls": 15,
+  "gen_tokens": 2377,
+  "prompt_tokens": 14960,
+  "redundant_prefill_tokens": 7993,
+  "gen_tok_per_s_e2e": 27.621575361540586,
+  "decode_ms_per_token": 25.037582045085948,
+  "prefill_tok_per_s": 551.045016583119,
+  "task_latency_p50_s": 55.20787146873772,
+  "task_latency_p90_s": 74.77400426473469,
+  "finish_reasons": {
+    "answer": 15,
+    "no_answer": 1
+  },
+  "engine_stats": {
+    "prefill_calls": 31,
+    "prefill_tokens": 14960,
+    "reused_turn": 0,
+    "reused_shared": 0,
+    "forced_tokens": 0,
+    "decode_steps": 255,
+    "live_row_steps": 2376,
+    "computed_row_steps": 4080,
+    "row_swaps": 0
+  },
+  "peak_mem_gb": null,
+  "env": {
+    "host": "1c91821700b6",
+    "slurm_job_id": null,
+    "gpu": null,
+    "torch": "2.9.1+cpu",
+    "transformers": "5.5.4",
+    "git_commit": "c4435bde4fd3adb80b8a44367203c997aa84a684",
+    "snapshot": false,
+    "git_dirty": true,
+    "argv": [
+      "bench/run_bench.py",
+      "--stage",
+      "p2_npu_eager16slots",
+      "--engine",
+      "p2_npu_eager16",
+      "--runner",
+      "continuous_async",
+      "--num-tasks",
+      "16",
+      "--exclude-tasks",
+      "423",
+      "--max-new-tokens",
+      "256",
+      "--max-turns",
+      "6",
+      "--device",
+      "npu"
+    ]
+  }
+}

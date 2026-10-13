@@ -5,6 +5,12 @@ PRESETS = {
     "naive": ("naive", {}),                                    # stage00_baseline
     "p1_s01": ("naive", {"cudnn_sdpa": False}),                # avoid per-shape cuDNN SDPA plan building
     "p1_s02": ("naive", _S02),                                 # + fla / causal-conv1d kernels for Gated-DeltaNet
+    "p1_npu_static": ("naive", {"static_cache": True}),       # Ascend Phase 1: existing StaticCache, no graph
+    "p1_npu_internal_format": ("naive", {"static_cache": True, "allow_internal_format": True}),
+    "p1_npu_mm_nd": ("naive", {"static_cache": True, "mm_bmm_format_nd": True}),
+    "p1_npu_mm_nz": ("naive", {"static_cache": True, "mm_bmm_format_nd": False}),
+    "p1_npu_reuse_input": ("naive", {"reuse_decode_input": True}),
+    "p3_npu_ascendc_layer0": ("naive", {"linear_attn_fast_path": False, "ascendc_conv_layer": 0}),
     "p1_s03": ("static", _S02),                                # + preallocated StaticCache, in-place decode buffers
     "p1_s04": ("static", {**_S02, "cuda_graph": True}),        # + CUDA-graph-captured decode step
     "p1_s05": ("static", {**_S02, "cuda_graph": True,          # + overlap graph launch with the previous step
@@ -17,6 +23,22 @@ PRESETS = {
 # Phase 2 (continuous batching): "batch" engines are driven by the `continuous` runner.
 _P1 = {**_S02, "compile_decode": True, "gqa_decode_attn": True}
 PRESETS.update({
+    "p2_npu_eager": ("batch", {"num_slots": 4, "compile_decode": False, "gqa_decode_attn": False}),
+    "p2_npu_prefix": ("batch", {"num_slots": 4, "compile_decode": False, "gqa_decode_attn": False,
+                                  "prefix_reuse": True}),
+    "p3_npu_eager8": ("batch", {"num_slots": 8, "compile_decode": False, "gqa_decode_attn": False}),
+    "p2_npu_eager16": ("batch", {"num_slots": 16, "compile_decode": False, "gqa_decode_attn": False}),
+    "p2_npu_eager16_prefix": ("batch", {"num_slots": 4, "compile_decode": False, "gqa_decode_attn": False,
+                                          "prefix_reuse": True}),
+    "p3_npu_prefix16": ("batch", {"num_slots": 16, "compile_decode": False, "gqa_decode_attn": False,
+                                   "prefix_reuse": True}),
+    "p3_npu_prefix_force16": ("batch", {"num_slots": 16, "compile_decode": False,
+                                          "gqa_decode_attn": False, "prefix_reuse": True,
+                                          "force_max": 128}),
+    "p2_npu_eager32": ("batch", {"num_slots": 32, "compile_decode": False, "gqa_decode_attn": False}),
+    "p2_npu_eager24": ("batch", {"num_slots": 24, "compile_decode": False, "gqa_decode_attn": False}),
+    "p2_npu_eager8_compact": ("batch", {"num_slots": 8, "compile_decode": False, "gqa_decode_attn": False,
+                                           "buckets": (2, 4, 6, 8)}),
     "p2_s01": ("batch", {**_P1, "num_slots": 32}),                # continuous batching, 32 slots
     "p2_s02": ("batch", {**_P1, "num_slots": 32,                  # + cross-turn / shared-prefix state reuse
                          "prefix_reuse": True}),

@@ -1,0 +1,76 @@
+{
+  "stage": "p3_task214_replay_ascendc",
+  "engine": "p3_npu_ascendc_layer0",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true,
+    "static_cache": false,
+    "allow_internal_format": false,
+    "mm_bmm_format_nd": null,
+    "ascendc_conv_layer": 0
+  },
+  "runner": "serial",
+  "config": {
+    "engine": "p3_npu_ascendc_layer0",
+    "runner": "serial",
+    "num_tasks": 1,
+    "data": "gsm8k_task214",
+    "exclude_tasks": [],
+    "repeats": 1,
+    "max_new_tokens": 512,
+    "max_turns": 6,
+    "device": "npu",
+    "replay": "e2e_acceleration_by_claude/results/p3_task214_baseline"
+  },
+  "load_s": 35.10667369235307,
+  "makespan_s_all": [
+    56.31367459241301
+  ],
+  "makespan_s": 56.31367459241301,
+  "tasks": 1,
+  "accuracy": 1.0,
+  "tasks_per_min": 1.0654605730183275,
+  "turns": 2,
+  "tool_calls": 1,
+  "gen_tokens": 338,
+  "prompt_tokens": 1221,
+  "redundant_prefill_tokens": 744,
+  "gen_tok_per_s_e2e": 6.002094561336579,
+  "decode_ms_per_token": 161.88510956652905,
+  "prefill_tok_per_s": 652.4435789008631,
+  "task_latency_p50_s": 56.313615401275456,
+  "task_latency_p90_s": 56.313615401275456,
+  "finish_reasons": {
+    "answer": 1
+  },
+  "peak_mem_gb": null,
+  "env": {
+    "host": "1c91821700b6",
+    "slurm_job_id": null,
+    "gpu": null,
+    "torch": "2.9.1+cpu",
+    "transformers": "5.5.4",
+    "git_commit": "c4435bde4fd3adb80b8a44367203c997aa84a684",
+    "snapshot": false,
+    "git_dirty": true,
+    "argv": [
+      "e2e_acceleration_by_claude/bench/run_bench.py",
+      "--stage",
+      "p3_task214_replay_ascendc",
+      "--engine",
+      "p3_npu_ascendc_layer0",
+      "--runner",
+      "serial",
+      "--num-tasks",
+      "1",
+      "--data",
+      "gsm8k_task214",
+      "--max-new-tokens",
+      "512",
+      "--max-turns",
+      "6",
+      "--replay",
+      "e2e_acceleration_by_claude/results/p3_task214_baseline"
+    ]
+  }
+}

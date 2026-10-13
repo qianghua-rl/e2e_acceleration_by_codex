@@ -1,0 +1,78 @@
+{
+  "stage": "p1_npu_reuse_input_probe",
+  "engine": "p1_npu_reuse_input",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true,
+    "static_cache": false,
+    "allow_internal_format": false,
+    "mm_bmm_format_nd": null,
+    "reuse_decode_input": true
+  },
+  "runner": "serial",
+  "config": {
+    "engine": "p1_npu_reuse_input",
+    "runner": "serial",
+    "num_tasks": 2,
+    "data": "gsm8k_128",
+    "exclude_tasks": [
+      423
+    ],
+    "repeats": 1,
+    "max_new_tokens": 64,
+    "max_turns": 2,
+    "device": "npu",
+    "replay": null
+  },
+  "load_s": 27.288377173244953,
+  "makespan_s_all": [
+    22.73170674405992
+  ],
+  "makespan_s": 22.73170674405992,
+  "tasks": 2,
+  "accuracy": 0.0,
+  "tasks_per_min": 5.278970090152051,
+  "turns": 2,
+  "tool_calls": 0,
+  "gen_tokens": 128,
+  "prompt_tokens": 811,
+  "redundant_prefill_tokens": 0,
+  "gen_tok_per_s_e2e": 5.6309014294955215,
+  "decode_ms_per_token": 166.72329710323422,
+  "prefill_tok_per_s": 472.3155361899836,
+  "task_latency_p50_s": 11.435498329810798,
+  "task_latency_p90_s": 11.435498329810798,
+  "finish_reasons": {
+    "no_answer": 2
+  },
+  "peak_mem_gb": null,
+  "env": {
+    "host": "1c91821700b6",
+    "slurm_job_id": null,
+    "gpu": null,
+    "torch": "2.9.1+cpu",
+    "transformers": "5.5.4",
+    "git_commit": "c4435bde4fd3adb80b8a44367203c997aa84a684",
+    "snapshot": false,
+    "git_dirty": true,
+    "argv": [
+      "bench/run_bench.py",
+      "--stage",
+      "p1_npu_reuse_input_probe",
+      "--engine",
+      "p1_npu_reuse_input",
+      "--runner",
+      "serial",
+      "--num-tasks",
+      "2",
+      "--exclude-tasks",
+      "423",
+      "--max-new-tokens",
+      "64",
+      "--max-turns",
+      "2",
+      "--device",
+      "npu"
+    ]
+  }
+}

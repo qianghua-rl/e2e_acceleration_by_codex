@@ -402,3 +402,368 @@ Dev numbers (`results/_dev_*`, dev job, ±0.1 s / ±1 s) in order; official runs
   gate_up 60.5, down 32.4; floor at 3.0 TB/s ~128), small latency-bound kernels ~20 us (add_rmsnorm 3.6 × 2,
   gdn_decode 4.9, gated_norm 3.4, silu 4.9). Kernels start within ~0.5 us of their predecessor (PDL): the
   20 us is execution latency, so only fewer kernels (fusion / a persistent megakernel) close it.
+# Ascend 910B migration log
+
+## 2026-10-08: stage 0 NPU smoke
+
+- Evidence: `npu-smi` reports an idle Ascend 910B3; a bf16 matrix test succeeds through `torch_npu`.
+- Compatibility setup: Python 3.12 environment `ascend-e2e`, PyTorch 2.9.1, torch-npu 2.9.1, Transformers 5.5.4, NumPy 1.26.4. No custom kernels were added.
+- Model: local Qwen3.5 checkpoint, 27,356,728,560 parameters, loaded in 34.7 s on one NPU.
+- Smoke measurement: 2 tasks, 13.45 s makespan; prefill 14.3%, decode 85.6%, 185.7 ms/token.
+- Amdahl estimate: reducing decode overhead is the first candidate because it dominates 85.6% of measured time; the estimate is provisional until a valid full-turn baseline is recorded.
+- Limitation: max-new-tokens=32 produced no tool calls and no answers, so this run is connectivity evidence only and is excluded from accuracy comparisons.
+
+## 2026-10-08: stage 0 eight-task probe
+
+- Measurement: serial runner, 8 tasks, max 128 new tokens, max 6 turns.
+- Result: 197.86 s makespan, 0.500 accuracy, 1,010 generated tokens, 186.33 ms/decode token.
+- Breakdown: decode 94.0%, prefill 5.9%, tools 0.0%.
+- Amdahl estimate: with decode fraction 0.940, a 1.5x decode improvement could give at most 1.415x overall. This selects decode launch/dispatch and cache behavior for Phase 1 profiling.
+- Interpretation: the workload is valid (4 tool calls and 4 answered tasks), but the 128-token cap makes this a probe rather than the final 512-token baseline.
+
+## 2026-10-08: stage 0 representative baseline
+
+- Measurement: 16 tasks (task 423 excluded), serial runner, max 256 new tokens, max 6 turns.
+- Result: 473.66 s makespan, 0.9375 accuracy, 2,329 generated tokens, 191.84 ms/decode token.
+- Breakdown: decode 93.1%, prefill 6.8%, tools 0.1%; 15 tool calls and 31 turns.
+- Amdahl estimate: decode fraction 0.931 gives a theoretical 1.399x end-to-end gain for a 1.5x decode improvement. This confirms the Phase 1 target selected by the 8-task probe.
+- Decision: retain this configuration as the representative baseline for iterative optimization; run the full 127-task confirmation after optimization stabilizes.
+
+## 2026-10-08: Phase 1 compile attempt (failed)
+
+- Evidence: `torch.compile(model, backend="torch_npu")` fails immediately with `InvalidBackend: Invalid backend: 'torch_npu'` under PyTorch 2.9.1 / torch-npu 2.9.1.
+- Amdahl estimate before implementation: decode is 93.1%; a 1.5x compiled decode path would have a theoretical 1.399x end-to-end gain.
+- Measured result: no runtime comparison was possible because the backend is unavailable.
+- Decision: reject this candidate without changing the measured baseline. The next candidate is existing framework batching/scheduling, which belongs to Phase 2.
+
+## 2026-10-08: Phase 2 NPU eager continuous batching
+
+- Implementation: added an NPU eager path to the existing slot-cache batch engine. CUDA Graphs, CUDA Events, Triton, and custom kernels are bypassed; HF/torch-npu operators and the existing continuous runner remain unchanged.
+- Evidence: 4 concurrent slots completed 4 tasks in 38.69 s; 3 tool calls; 167 decode steps; 514 live-row steps and 668 computed-row steps.
+- Breakdown: decode 81.5%, prefill 18.4%; decode 62.09 ms/token versus 185.7 ms/token in the serial probe.
+- Amdahl estimate: assuming a 3x reduction in weight-read cost, the 94% decode fraction predicts 2.54x overall speedup. The observed per-token reduction is 2.99x; makespan comparison is affected by different task trajectories.
+- Correctness: 3/4 tasks answered correctly under the 128-token cap; no output divergence or runtime failure. Keep as a Phase 2 candidate and rerun with the representative workload.
+
+## 2026-10-08: Phase 2 NPU eager batching validation
+
+- Same 16-task workload and token limits as the serial baseline, with four continuous-batching slots.
+- Result: 152.12 s makespan versus 473.66 s serial (**3.11x**), accuracy 0.9375 unchanged.
+- Decode fell from 191.84 to 53.38 ms/token (**3.59x**); prefill rose to 19.3% of makespan because prefill remains eager and batch-1.
+- Amdahl interpretation: batching removes repeated weight reads from decode; the remaining prefill share is now the dominant next target. Select prefix/state reuse or batched prefill for the next Phase 2 step.
+
+## 2026-10-08: Phase 2 prefix reuse attempt (failed)
+
+- Candidate: reuse the existing slot recurrent/KV state across turns and shared prefixes.
+- Evidence: the attempt fails at the first prefill with `TypeError: 'NoneType' object is not callable` in the wrapper around `causal_conv1d_fn`.
+- Cause: optional flash-linear-attention/causal-conv1d is unavailable on this NPU environment; Transformers uses a pure PyTorch fallback with no callable fast-path function to wrap.
+- Decision: reject and record the failure. The validated NPU eager batching path remains the current best implementation.
+
+## 2026-10-08: Phase 3 NPU scheduler scaling
+
+- Change: increased eager continuous-batching slots from 4 to 8, using the same existing operators and asynchronous runner.
+- Result: 121.65 s versus 152.12 s at 4 slots (**1.25x**), accuracy remained 0.9375.
+- Decode improved from 53.38 to 40.64 ms/token; prefill is now 23.2% of makespan.
+- Amdahl estimate before implementation: with decode fraction 0.806 and an expected 1.2x decode improvement, overall gain was `1/(0.194+0.806/1.2)=1.145x`; measured gain was 1.25x, exceeding the estimate.
+- Exit signal: further slot increases are likely to yield diminishing returns because prefill and memory pressure now dominate; the next step is a final full-workload confirmation.
+
+## 2026-10-08: final 127-task confirmation
+
+- Configuration: 8-slot NPU eager continuous batching, 127 tasks with task 423 excluded, max 512 new tokens, max 6 turns.
+- Result: 907.54 s makespan, accuracy 0.9370, 19,812 generated tokens, 252 turns, 125 tool calls.
+- Breakdown: decode 66.9% (607.04 s, 31.03 ms/token); prefill 33.0% (299.09 s, 418.41 token/s).
+- Correctness: 124 tasks finished with an answer and 3 reached the token/turn limit; answer accuracy remained at the expected ~0.94 level.
+- Exit decision: the three-phase no-custom-kernel pipeline is complete for the fixed 127-task workload. Further gains require reducing eager prefill or using NPU graph/compiler features not available through the tested public backend; those are recorded as future candidates rather than silently implemented.
+
+## 2026-10-09: H100 vs Ascend comparison
+
+- Ascend final (127 tasks, 8 slots, bf16 eager): 907.54 s, accuracy 0.937, decode 31.0 ms/token.
+- H100 final (same workload, FP8 + CUDA graphs + custom kernels): 8.36 s, accuracy 0.945.
+- The Ascend run is about 108x slower in makespan. The gap is explained by the excluded techniques (CUDA graph, FP8, custom kernels, PDL, paged KV, fla fast paths), all of which failed or were unavailable on this stack.
+- Ascend's own optimization pipeline still delivered 3.89x on the representative 16-task workload (473.66 s to 121.65 s) with unchanged accuracy.
+- Full comparison table: `results/H100_VS_ASCEND_COMPARISON.md`.
+
+## 2026-10-09: Phase 1 Ascend backend matrix
+
+- A small bf16 MLP was used to avoid spending 10+ minutes compiling the full 27B model.
+- `torch.compile(backend="npu")`: reached the CANN compiler, then failed because `torchair` is unavailable.
+- `torch.compile(backend="npugraphs")`: failed because the environment lacks `triton`.
+- `torch.compile(backend="npugraph_ex")`: failed because the driver/runtime lacks `aclmdlRICaptureBegin`.
+- These are environment/runtime blockers, not evidence that 910B cannot support the methods. The results are recorded in `results/p1_npu_backend_matrix/`; the next action is to install the matched framework components before model-level graph tests.
+
+## 2026-10-09: dependency follow-up
+
+- Installed `triton==3.6.0` from the Huawei PyPI mirror. This is available for the PyTorch 2.9.1 environment, but `npugraphs` still fails during the small-module test with `RuntimeError: 0 active drivers ([]). There should only be one.`
+- Built and installed the public TorchAir master Python package in editable mode from `Ascend/torchair`; no public PyPI wheel exists. The official compatibility table does not list the current combination (PyTorch/torch_npu 2.9.1 with CANN 8.0.RC3). The `npu` backend still fails in the TorchAir import/compiler path.
+- `npugraph_ex` continues to fail with `Failed to find function aclmdlRICaptureBegin`; symbol lookup in the installed toolkit/driver shared libraries finds no exported symbol. This indicates the installed runtime/driver predates that capture API.
+- Conclusion: graph/compiler dependencies cannot be made version-correct from public packages for this exact CANN stack. Preserve the validated 8-slot eager result and proceed to Phase 3 general optimization; do not claim Phase 1 graph speedups without a successful small-module correctness test.
+
+## 2026-10-09: strict Ascend/H100 baseline comparison
+
+- Completed the requested full Ascend serial run: 127 tasks, task 423 excluded, max 512 new tokens, max 6 turns.
+- Ascend 910B3: **3466.21 s**, accuracy 0.9449, decode 165.94 ms/token.
+- H100 adjusted baseline: **1470.6 s**, accuracy 0.937, decode 71.84 ms/token.
+- Direct ratio: Ascend is **2.36x slower** in makespan and **2.31x slower** per decode token. This is a measured comparison on the same adjusted workload; no extrapolation is used.
+
+## 2026-10-09: Phase 1 Ascend L2/L3 profile
+
+- Fixed the L1 timer to synchronize `torch.npu` (the previous implementation only recognized CUDA).
+- Added `bench/profile_npu.py` using `torch_npu.profiler` NPU activity and CANN `msprof` trace export.
+- L3 operator evidence: MatMulV2 6.595 s/67,095 calls; convolution layout transform 1.559 s/6,480; Mul 0.998 s/160,302; ReduceSum 0.348 s/34,704; Cast/copy/slice about 0.9 s combined; FlashAttention only 0.091 s.
+- Amdahl choice: FlashAttention is not the first candidate. GEMM plus GDN/conv layout and elementwise launch overhead dominate. A 1.2x MatMul improvement would yield only about 1.08x local speedup at the measured `p`≈0.65, so low-effort existing fast paths and static/cache launch changes must be tested before any Phase 3 kernel work.
+
+## 2026-10-09: Phase 1 StaticCache
+
+- One change: replaced per-request DynamicCache with the existing Transformers `StaticCache` (bf16, eager NPU, batch=1).
+- 8-task validation: 197.86 s → 174.52 s (**11.8% faster**), decode 186.33 → 166.69 ms/token, accuracy unchanged at 0.500 under the 128-token probe cap.
+- Amdahl estimate: 1.1x local decode improvement with p=0.94 predicted 1.089x overall; measured 1.134x. The extra gain is consistent with removing cache allocation/copy overhead in prefill.
+- Decision: keep StaticCache and run the next fixed 16-task validation before applying further changes.
+
+## 2026-10-09: StaticCache 16-task validation
+
+- Same fixed 16-task configuration as the serial baseline.
+- Result: 473.66 s → 422.44 s (**10.8% faster**), accuracy unchanged at 0.9375; decode 191.84 → 175.14 ms/token.
+- This confirms the 8-task result and keeps StaticCache as the Phase 1 base for the next candidate. The gain is below the H100 CUDA-graph gains but is achieved without precision changes or custom kernels.
+
+## 2026-10-09: asynchronous token readback attempt (failed)
+
+- Candidate: with StaticCache, read token outputs in chunks of 8 to reduce per-token host synchronization.
+- Same 16-task validation: 1214.45 s, accuracy 0.0, 61 turns, 6,957 generated tokens.
+- The candidate changed cache/token feedback semantics and diverged badly from the 31-turn reference. It was reverted; no performance result is retained.
+- Decision: do not trade semantic correctness for host-sync reduction. Future async readback must use a graph-safe fixed-token feedback mechanism and pass token-level equivalence before timing.
+
+## 2026-10-09: Phase 1 internal-format and MatMul layout attempts
+
+- `torch.npu.config.allow_internal_format=True`: rejected because GDN's Conv2D fallback fails CANN 8.0.RC3 op selection (`Conv2D is not found in this op store`).
+- `set_mm_bmm_format_nd(False)` (NZ layout): same 8-task trajectory as StaticCache, but 200.00 s vs 174.52 s (14.6% slower); rejected.
+- `set_mm_bmm_format_nd(True)` matched the installed default and is not a valid code change; it is excluded from speedup claims.
+- Phase 1 status: StaticCache remains +10.8% on the 16-task validation. Phase 1 is not at a hardware ceiling; current remaining options depend on an Ascend-compatible GDN fast path or a matched graph compiler/runtime stack. No custom kernels have been introduced.
+
+## 2026-10-09: Phase 2 live-row compaction attempt (failed)
+
+- Profile evidence: the 8-slot trace had 17.4% long gaps and 31.1% computed-row padding; average live rows were 5.51/8. Amdahl selected bucketed compaction as the next candidate.
+- Implementation: existing slot-cache bucket/row compaction, no custom kernel.
+- Runtime validation failed in the GDN fallback conv update because the conv state batch stayed 8 while the compact input batch was 2 (`aclnnCat` shape mismatch).
+- Decision: reject this implementation without a speed claim; preserve the 8-slot baseline and fix cache state view semantics before retrying.
+
+## 2026-10-09: Phase 2 compaction retry
+
+- Fix: synchronize `SlotCache.set_rows(B)` with each active bucket before the model step, correcting the prior GDN state shape mismatch.
+- Correctness: 16-task accuracy 0.9375, 31 turns, 2,327 generated tokens, matching the fixed 8-slot trajectory.
+- Performance: fixed 8 rows 121.65 s; bucket compaction 126.35 s (3.9% slower). Computed rows dropped 3376 -> 2486, but 25 row swaps and bucket/prefill overhead dominated.
+- Amdahl decision: reject compaction as an end-to-end optimization despite lower padding; retain only the state-view correctness fix.
+
+## 2026-10-09: Phase 2 16-slot scan
+
+- Candidate: increase fixed eager batch from 8 to 16 slots after compaction showed row padding but excessive swap overhead.
+- Result: 121.65 s -> 87.05 s (**1.40x**), accuracy unchanged at 0.9375; decode 40.64 -> 25.44 ms/token.
+- Amdahl estimate: 1.3x local decode improvement with p=0.767 predicted 1.19x; measured gain was 1.40x due to better critical-path overlap.
+- Decision: retain 16 slots and test 32 slots next, with HBM usage as a guardrail.
+
+## 2026-10-09: Phase 2 32-slot scan
+
+- 32-slot fixed eager batching initialized an 8.6 GiB cache but failed at the first workload step with NPU OOM: 59.66 GiB allocated of 60.96 GiB, only 5.30 MiB free.
+- Decision: reject 32 slots for bf16; 16 slots is the largest tested stable concurrency. Further concurrency requires memory reduction (Phase 3 FP8 per-tensor weights or KV/state changes), not a larger bf16 slot count.
+
+## 2026-10-09: Phase 2 full 127-task confirmation at 16 slots
+
+- Full workload result: 656.37 s makespan, accuracy 0.9449, 253 turns and 126 tool calls.
+- Compared with 8-slot final (907.54 s), this is **1.38x faster**; compared with strict serial baseline (3466.21 s), **5.29x faster**.
+- Decode is 17.58 ms/token and only 52.3% of makespan; eager prefill is now 47.5% and is the next Amdahl target.
+- 32-slot bf16 was rejected by OOM, establishing the memory boundary. Phase 2 next candidate is prefill reuse/forced-token scheduling, subject to cache-state correctness.
+
+## 2026-10-09: Phase 3 FP8 capability probe
+
+- Attempted the H100-style per-tensor FP8 path using torch-npu tensors and `torch._scaled_mm`.
+- The initial bf16 -> `float8_e4m3fn` cast fails in CANN 8.0.RC3: dtype 36/UNDEFINED is not in the supported dtype list. No performance or accuracy result is claimed.
+- Decision: defer FP8 until an Ascend quantization API or a general Phase 3 kernel path is available; retain the measured 16-slot bf16 result.
+
+## 2026-10-09: Phase 3 quantized matmul API probe
+
+- Tested `torch_npu.npu_quant_matmul` with int8 activations/weights and bf16 output.
+- CANN 8.0.RC3 rejects A8W8: `only aclnnQuantMatmulV5 support A8W4, please upgrade CANN`.
+- This confirms the installed runtime cannot provide the required per-tensor linear quantization path. Retain the 16-slot bf16 result; any further Phase 3 progress requires a general Ascend C kernel or a CANN upgrade.
+
+## 2026-10-09: Phase 3 weight-only quantization capability
+
+- Tested the existing Ascend `npu_weight_quant_batchmatmul` operator with bf16 activations, int8 weights, per-output-channel bf16 antiquant scales, and bf16 output.
+- Probe succeeded for `(4,512) x (512,1024)`, returning bf16 output. This is the first usable quantization path on the installed CANN stack and may reduce weight memory enough to test >16 slots.
+- No model-wide replacement or speed claim yet; next step requires deterministic weight conversion, layer-level reference error checks, then e2e accuracy and profile.
+
+## 2026-10-09: weight-only quant layer reference
+
+- Per-output-channel symmetric int8 quantization was compared against bf16 Linear using `npu_weight_quant_batchmatmul`.
+- M=8 result: max abs error 0.75, mean abs 0.134, mean relative 6.35%; quant 0.062 ms versus bf16 0.024 ms.
+- Amdahl decision: do not replace model layers for batch-1 latency. Continue only as a memory/concurrency experiment at larger M, with full accuracy validation required.
+- M=32 follow-up: quant 0.079 ms versus bf16 0.029 ms (2.7x slower), mean abs error 0.135. Reject as a latency optimization; do not modify model weights without a separate memory/accuracy study.
+
+## 2026-10-09: Ascend C kernel build probe
+
+- Obtained the official `Ascend/samples/operator` AddCustom sample and invoked its `install.sh -v Ascend910B3` against CANN 8.0.RC3.
+- Build failed before compilation: `/usr/local/python3.9.2/bin/python3.9` cannot load `libpython3.9.so.1.0`; CANN `opp/*/custom` directories also deny user access, so no `CustomOp` package was generated.
+- Decision: do not claim a Phase 3 kernel result. A root-admin Python/runtime and CANN custom-op permission fix is required before compiling a general Ascend C kernel.
+
+## 2026-10-09: Ascend C build retry
+
+- Added `/usr/local/python3.9.2/lib` to `LD_LIBRARY_PATH`; msOpGen generated the CustomOp project.
+- Corrected the generated CMake preset from nonexistent `/usr/local/Ascend/latest` to the actual CANN 8.0.RC3 aarch64 path.
+- CMake now starts, but opbuild does not generate `build_out/autogen/op_proto.cc`, so host compilation cannot proceed. No kernel package or benchmark result exists yet.
+
+## 2026-10-09: Ascend C AddCustom package built
+
+- Corrected `ASCEND_CANN_PACKAGE_PATH` to the CANN root so `toolkit/tools/opbuild/op_build` is found; headers remain available through the root `include` symlink.
+- Official AddCustom Ascend C sample compiled for `ascend910b` and produced/verified `custom_opp_ubuntu_aarch64.run`.
+- Package deployment failed only because default OPP `vendors` is root-owned. No benchmark claim yet; next step is user-writable custom OPP deployment and a standalone Add correctness run.
+
+## 2026-10-09: Ascend C AddCustom runtime gate
+
+- Deployed the generated package into user-writable `custom_opp` and compiled the official aclnn invocation sample against its headers/library.
+- Runtime call reached `aclnnAddCustomGetWorkspaceSize` but returned status `161001`; the Add sample did not pass its correctness gate.
+- The status maps to `ACLNN_ERR_PARAM_NULLPTR`; package files and exported API symbols are present, so the remaining issue is runtime/operator registration or the sample API contract, not compilation.
+- Diagnostic rebuild showed all `aclCreateTensor` calls return non-null pointers/status 0. The error changes between 361001 and 161001 depending on custom OPP environment variables, confirming registration/environment mismatch rather than null tensor creation.
+
+## 2026-10-10: custom-op runtime corrected
+
+- Root installed the generated package into the standard CANN OPP path and granted `davinci` read/traverse permissions for CANN OPP metadata and custom directories.
+- Standalone `aclnnAddCustom` correctness now passes: sampled outputs are `3.0`; the program prints `test pass`.
+- The custom Ascend C pipeline is now unblocked for Phase 3 kernel microbenchmarks. The Add sample is a generic correctness test, not yet an LLM hotspot optimization.
+
+## 2026-10-09: Phase 3 NPU critical-path trace
+
+- Analyzed the strict 127-task 16-slot trace with `bench/analyze_steps.py`.
+- `engine.step()` accounts for 343.11 s (52.3%), while gaps over 50 ms account for 299.06 s (45.6%). Average step is 245.08 ms, live-row fill 88.3%, padding 11.7%.
+- Amdahl decision: prioritize prefill/tool/state-transition gaps and an NPU-aware scheduling simulator. Decode kernel micro-optimizations alone cannot address the 45.6% gap fraction.
+- The CUDA-oriented `sim_steps.py` cannot consume this NPU eager run because no CUDA bucket profile exists; this is recorded as a tooling gap rather than using an invalid simulation.
+
+## 2026-10-09: NPU-aware simulator and 24-slot attempt
+
+- Added and corrected `bench/sim_npu_steps.py` to put prefill before decode, model async tool waits without blocking other rows, and include EOS step counts. Mean measured step costs are 180.18/221.07/245.08 ms for buckets 4/8/16.
+- Calibration: 8-slot prediction 873.57 s vs 907.54 s measured (-3.74%); 16-slot prediction 644.97 s vs 656.37 s measured (-1.74%). Both are within the PLAN's 5% simulation tolerance.
+- The simulator predicts 565.08 s at 24 slots. A real 24-slot attempt failed during GE initialization; logs later showed user processes cannot read `opp/scene.info` (root:root 0640) and cannot traverse root-only `opp/vendors`/custom directories. This runtime permission issue must be fixed before retesting 24 slots.
+- Simulator evaluated longest-chain-first admission using measured per-task prompt+generation lengths: predicted 930.18 s at 8 slots, 691.33 s at 16, and 612.92 s at 24, all worse than file-order predictions. The candidate was rejected before implementation by the simulate-first gate; an earlier unverified implementation stub was removed.
+- Decision: retain 16 slots as the largest stable measured configuration. The simulator and failure evidence are recorded; 24-slot remains unverified.
+
+## 2026-10-09: final system-level comparison
+
+- Designated the validated 16-slot full workload (`656.37 s`, accuracy `0.9449`) as the Ascend Phase 3 system final. It is the same measured configuration as the Phase 2 endpoint because subsequent system candidates (compaction, 24 slots) provided no safe improvement.
+- Added `results/FINAL_COMPARISON_REPORT.md` comparing strict H100 and Ascend curves and separating the system track from the blocked custom-kernel track.
+- Tool-worker candidate rejected by Amdahl: strict serial profiling measured only 5.10 s of tool time in a 3466.21 s run (~0.15%), and the 16-slot run reports ~0.1% tool share. Even infinite tool speedup cannot materially reduce makespan; no implementation was made.
+
+## 2026-10-09: Phase 3 longest-chain admission candidate
+
+- Candidate: prioritize admissions by historical per-task prompt+generation length, based on the observed critical-path/gap share.
+- The corrected NPU simulator predicts this policy is worse than file order at every modeled slot count (16-slot: 691.33 s vs 644.97 s, +7.2%).
+- Decision: reject before implementation/benchmark per the simulate-first gate. The earlier unverified implementation stub was removed; its GE startup failure was from the environment permission issue and is not used as candidate evidence.
+
+## 2026-10-09: Ascend long-context compatibility probe
+
+- Attempted the Phase 2 16-slot engine on `gsm8k_longctx_128`.
+- The workload's first prompt exceeds the engine's fixed `max_len=2048` cache and aborts before timing (`prompt exceeds max_len`).
+- Decision: do not fabricate a longctx comparison. A future longctx implementation requires paged/larger KV allocation and an explicit HBM budget; this is a Phase 3 systems/kernel candidate.
+
+## 2026-10-09: longctx DynamicCache fallback probe
+
+- Ran two longctx tasks with the serial DynamicCache engine (max 64 tokens, 2 turns) to separate capacity from model/runtime failure.
+- Result: 30.62 s, 8,500 prompt tokens, prefill 1,039 token/s, decode 177.84 ms/token. Accuracy is intentionally invalid (0.0) under the short probe cap.
+- This confirms the workload itself runs; the blocker is the fixed 2048-token Phase 2 SlotCache. Paged/larger KV/state allocation remains a Phase 3 systems candidate.
+
+## 2026-10-09: existing FLA/causal-conv fast-path attempt
+
+- Installed pure-Python `flash-linear-attention==0.5.2`/`fla-core==0.5.2` from the Huawei mirror.
+- `causal-conv1d==1.7.0` has no aarch64 wheel; its source build requires CUDA/nvcc and fails. A direct import probe confirms `causal_conv1d` is unavailable, so the Qwen fast path cannot be constructed.
+- Decision: reject this candidate for the current Ascend package/runtime. This is an evidence-based dependency limitation, not a conclusion that Phase 1 has no theoretical room.
+
+## 2026-10-09: Phase 3 prefix/state reuse and forced suffix
+
+- Fixed GDN fallback prefix extension: when `causal_conv1d_fn=None`, HF bypassed the function wrapper; extension now wraps the existing Conv1d module and preserves cached K-1 input history. CPU reference checks: GDN output/state max abs error 0; Conv1d suffix max abs error 1.49e-8.
+- NPU `check_batch.py`: extend-vs-full 8/8 identical; shared-prefix 7/8 identical (one first-turn divergence); alone-vs-concurrent 8/8 identical.
+- 16-task prefix reuse: 84.87 s vs 87.05 s baseline; accuracy unchanged at 0.9375.
+- Strict 127-task prefix reuse + forced suffix: 556.76 s, accuracy 0.9449, vs Phase 2 656.37 s (15.2% better). Prefill 7.08 s; decode 548.18 s (98.5%). Prefix-only full run was 559.16 s, so forced suffix contributes ~0.4% incremental gain.
+- Amdahl interpretation: prefix/state reuse is the material system gain; forced suffix mostly moves eager prefill work into batched decode at 16 slots. Next bottleneck is decode/step cost.
+
+## 2026-10-09: correction to interim Phase 3 label
+
+- An earlier report incorrectly called the 656.37 s Phase 2 16-slot result the Phase 3 final. That was not a new Phase 3 optimization.
+- The actual Phase 3 system result is the measured 16-slot prefix/state reuse + forced-suffix run at 556.76 s, accuracy 0.9449. Prefix-only measured 559.16 s; forced suffix adds only 0.4% and is below the 5% step threshold. The combined Phase 3 gain over Phase 2 is 15.2%.
+- `results/FINAL_COMPARISON_REPORT.md` and `results/ASCEND_FINAL_REPORT.md` now use the measured Phase 3 value and explain the attribution.
+
+## 2026-10-09: Prefix/recurrent continuation reference repair
+
+- HF bypassed the causal-conv wrapper when `causal_conv1d_fn=None`, directly invoking `nn.Conv1d` and dropping cached history. Added an extension-mode Conv1d wrapper and corrected its suffix crop to `[K-1:K-1+n]`.
+- CPU reference validation: GDN full vs prefix+initial_state output/state max abs error 0; causal Conv1d suffix max abs error 1.49e-8.
+- NPU token-level check is pending because CANN OPP metadata/directory permissions currently prevent ordinary users from initializing GE. Do not claim the optimization until `bench/check_batch.py` passes on NPU.
+
+## 2026-10-10: NPU eager batch initialization cleanup
+
+- The NPU eager path now disables the CUDA-only `torch.compile` setup even when the shared engine default is `compile_decode=True`.
+- Initialization warmup is bounded by the configured slot count (`min(16, num_slots)`) instead of probing 16 rows unconditionally. This avoids touching inactive rows and makes 8-slot probes use only their allocated cache.
+- Validation: Python bytecode compilation and `git diff --check` pass. Hardware e2e re-profile remains required on the Ascend node.
+
+## 2026-10-10: Phase 3 layer-0 Ascend-C integration
+
+- Integrated the verified GDN/Conv Ascend-C ACLNN bridge into Qwen3.5 linear-attention layer 0 decode only. Prefill and other layers remain on PyTorch/CANN.
+- Real layer token check at C=10240: output max abs 0.00390625, state max abs 0; baseline and replacement first greedy tokens both `[271, 16]`.
+- 8-task short probe: baseline 48.118 s, layer-0 49.197 s (2.24% slower); both use a 64-token/short probe with accuracy 0.0, so this is a timing/equivalence probe rather than a quality result.
+- 16-task layer-0 probe: 111.368 s, but the matching 16-task baseline did not produce metrics after repeated independent attempts; no speedup claim is made.
+- Blocking gate: fair 16-task/127-task replay A/B, L3 profile, full accuracy, and long-context checks require a clean baseline run. Existing NPU OOM/runtime termination is recorded; the custom kernel is not promoted as an optimization until the paired baseline exists.
+
+## 2026-10-12: Phase 3 layer-0 paired performance gate
+
+- Clean paired scripts now capture stdout/stderr/exit code and environment snapshots. Both baseline and Ascend-C exit code 0.
+- 16-task paired result: baseline 440.812 s, Ascend-C layer-0 462.559 s; both accuracy 0.9375, 31 turns, 2,329 generated tokens.
+- Ascend-C regression: 4.93% end-to-end and 4.99% decode. Task 214 standalone answer correctness is 1.0 in both paths.
+- Amdahl/performance decision: reject this single-layer kernel integration for the current model path; its regression is at the 5% exit threshold, so no 127-task replay or L3 claim is justified. Retain the verified kernel and bridge as infrastructure for a future fused multi-layer/state boundary.
+# 2026-10-10: Phase 3 kernel candidate selected from L3 profile
+
+- AddCustom remains a compiler/deployment/runtime measurement smoke test only;
+  it is excluded from LLM speedup claims.
+- Selected a general BF16/FP16 GDN/Conv state-update candidate combining the
+  profiled TransData, causal Conv state update, gate/state Mul, and recurrent
+  reduction work. Evidence and acceptance gates are recorded in
+  `results/p3_gdn_conv_candidate/README.md`.
+- MatMulV2 remains on the CANN path for this iteration because its vendor GEMM
+  implementation is already highly optimized and a custom replacement has a
+  high regression risk.
+
+# 2026-10-12: Phase 1 StaticCache strict 127-task validation
+
+- Configuration: `p1_npu_static`, serial runner, `gsm8k_128` with task 423
+  excluded, `max_new_tokens=512`, `max_turns=6`, Ascend 910B3.
+- Amdahl hypothesis: preallocated KV storage should remove DynamicCache growth
+  and reduce cache-management overhead; the representative 16-task probe
+  suggested approximately 10.8% makespan improvement.
+- Full measured result: makespan 3552.287 s, accuracy 0.9449, 253 turns,
+  19,650 generated tokens, 169.689 ms/token decode, 492.859 tok/s prefill.
+- Strict DynamicCache baseline is 3466.21 s, so the full-run result is 2.48%
+  slower. The 16-task gain does not generalize to the 127-task workload;
+  StaticCache is retained as a tested candidate but is not claimed as a
+  reliable end-to-end Phase 1 improvement.
+
+# 2026-10-12: p1_npu_reuse_input probe
+
+- Single change: reuse a fixed `(1, 1)` NPU input tensor for decode instead of
+  allocating a device tensor on every token.
+- Two-task probe, task 423 excluded, max 64 new tokens, serial eager NPU:
+  baseline 22.044 s / 161.41 ms per token; candidate 22.732 s / 166.72 ms
+  per token. The 128-token trajectory was identical.
+- Allocation was not a positive fraction of the decode path. The candidate
+  regressed 3.1% and was REJECTED before 16/127-task expansion.
+
+# 2026-10-12: Phase 1 plan execution audit
+
+- Re-ran the documented CLI discovery under `source env_ascend.sh` and
+  `conda run -n ascend-e2e`; `run_bench.py`, `profile_npu.py`,
+  `check_equiv.py`, and `check_batch.py` all expose the expected interfaces.
+- The environment is usable on Ascend 910B3 (`davinci` membership and readable
+  CANN `opp/scene.info`); the toolkit emits only an owner-mismatch warning.
+- Static validation passed with `python -m compileall -q agentopt bench`.
+  `git diff --check` reports only the pre-existing blank line at EOF in this
+  log, with no whitespace errors in source files.
+- The strict 127-task DynamicCache and StaticCache artifacts remain the
+  authoritative Phase 1 comparison: accuracy 0.9449, 253 turns, and 126 tool
+  calls match; StaticCache is 3552.287 s versus 3466.208 s (2.48% slower).
+- Decision: REJECT StaticCache as a Phase 1 success candidate. The tested
+  compile/backend, internal-format, NZ-layout, and async-readback candidates
+  are also rejected or blocked in their recorded result directories. No
+  candidate meets the plan's stable >=5% single-request and non-regression
+  gates, so this software stack has no qualifying Phase 1 end-to-end gain.
+

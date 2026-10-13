@@ -11,12 +11,46 @@ Done by wrapping the two per-layer function attributes, so the HF forward itself
 
 
 def install(model, cache):
-    for layer in model.model.layers:
+    text_model = getattr(model.model, "language_model", model.model)
+    for layer in text_model.layers:
         if layer.layer_type != "linear_attention":
             continue
         la = layer.linear_attn
-        la.causal_conv1d_fn = _wrap_conv(la.causal_conv1d_fn, cache)
+        if la.causal_conv1d_fn is None:
+            la.conv1d = _wrap_conv_module(la.conv1d, cache)
+        else:
+            la.causal_conv1d_fn = _wrap_conv(la.causal_conv1d_fn, cache)
         la.chunk_gated_delta_rule = _wrap_chunk(la.chunk_gated_delta_rule, cache, la.layer_idx)
+
+
+class _ConvExtendWrapper:
+    def __new__(cls, conv, cache):
+        import torch
+        import torch.nn as nn
+        class Wrapper(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.conv = conv
+                self.cache = cache
+
+            @property
+            def weight(self): return self.conv.weight
+
+            @property
+            def bias(self): return self.conv.bias
+
+            def forward(self, x):
+                if not self.cache.extending:
+                    return self.conv(x)
+                prefix = self.cache.prev_conv[None, :, 1:].to(dtype=x.dtype, device=x.device)
+                n = x.shape[-1]
+                k = self.conv.kernel_size[0]
+                return self.conv(torch.cat((prefix, x), dim=-1))[..., k - 1:k - 1 + n]
+        return Wrapper()
+
+
+def _wrap_conv_module(conv, cache):
+    return _ConvExtendWrapper(conv, cache)
 
 
 def _wrap_conv(conv_fn, cache):

@@ -1,0 +1,97 @@
+{
+  "stage": "p2_npu_eager_probe4",
+  "engine": "p2_npu_eager",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true,
+    "num_slots": 4,
+    "max_len": 2048,
+    "compile_decode": false,
+    "gqa_decode_attn": false,
+    "prefix_reuse": false,
+    "force_max": 0,
+    "inplace_state": false,
+    "fp8": null,
+    "buckets": null,
+    "state_dtype": null,
+    "recurrent_launch": null
+  },
+  "runner": "continuous_async",
+  "config": {
+    "engine": "p2_npu_eager",
+    "runner": "continuous_async",
+    "num_tasks": 4,
+    "data": "gsm8k_128",
+    "exclude_tasks": [
+      423
+    ],
+    "repeats": 1,
+    "max_new_tokens": 128,
+    "max_turns": 6,
+    "device": "npu",
+    "replay": null
+  },
+  "load_s": 33.3188419342041,
+  "makespan_s_all": [
+    38.68767211213708
+  ],
+  "makespan_s": 38.68767211213708,
+  "tasks": 4,
+  "accuracy": 0.75,
+  "tasks_per_min": 6.203526521429221,
+  "turns": 7,
+  "tool_calls": 3,
+  "gen_tokens": 515,
+  "prompt_tokens": 3183,
+  "redundant_prefill_tokens": 1465,
+  "gen_tok_per_s_e2e": 13.311733993900202,
+  "decode_ms_per_token": 62.08909681528865,
+  "prefill_tok_per_s": 448.0949865441577,
+  "task_latency_p50_s": 34.96218724362552,
+  "task_latency_p90_s": 38.68603250104934,
+  "finish_reasons": {
+    "answer": 3,
+    "no_answer": 1
+  },
+  "engine_stats": {
+    "prefill_calls": 7,
+    "prefill_tokens": 3183,
+    "reused_turn": 0,
+    "reused_shared": 0,
+    "forced_tokens": 0,
+    "decode_steps": 167,
+    "live_row_steps": 514,
+    "computed_row_steps": 668,
+    "row_swaps": 0
+  },
+  "peak_mem_gb": null,
+  "env": {
+    "host": "1c91821700b6",
+    "slurm_job_id": null,
+    "gpu": null,
+    "torch": "2.9.1+cpu",
+    "transformers": "5.5.4",
+    "git_commit": "c4435bde4fd3adb80b8a44367203c997aa84a684",
+    "snapshot": false,
+    "git_dirty": true,
+    "argv": [
+      "bench/run_bench.py",
+      "--stage",
+      "p2_npu_eager_probe4",
+      "--engine",
+      "p2_npu_eager",
+      "--runner",
+      "continuous_async",
+      "--num-tasks",
+      "4",
+      "--exclude-tasks",
+      "423",
+      "--max-new-tokens",
+      "128",
+      "--max-turns",
+      "6",
+      "--device",
+      "npu"
+    ]
+  }
+}

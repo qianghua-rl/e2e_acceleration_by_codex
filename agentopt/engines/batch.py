@@ -53,12 +53,13 @@ class BatchEngine(NaiveEngine):
                  inplace_state: bool = False, fp8: str | None = None, buckets: tuple | None = None,
                  state_dtype: str | None = None, recurrent_launch: str | None = None, **kw):
         super().__init__(**kw)
+        self.npu_eager = self.device.startswith("npu")
         self.options.update(num_slots=num_slots, max_len=max_len, compile_decode=compile_decode,
                             gqa_decode_attn=gqa_decode_attn, prefix_reuse=prefix_reuse, force_max=force_max,
                             inplace_state=inplace_state, fp8=fp8, buckets=buckets, state_dtype=state_dtype,
                             recurrent_launch=recurrent_launch)
         assert prefix_reuse or not force_max, "forced-token prefill only feeds suffixes of reusable state"
-        if fp8:
+        if fp8 and not self.npu_eager:
             from .quant import fp8_quantize
             fp8_quantize(self.model, fp8)
             print(f"fp8: weights now {torch.cuda.memory_allocated() / 1e9:.1f} GB on device", flush=True)
@@ -66,7 +67,10 @@ class BatchEngine(NaiveEngine):
             from .decode_attention import install
             install(self.model)
         self.decode_model = self.model
-        if compile_decode:
+        # The CUDA graph/Inductor path is not supported by the eager NPU runner.
+        # Keeping it disabled there also avoids installing CUDA-specific cache
+        # settings and compiler guards in a torch-npu process.
+        if compile_decode and not self.npu_eager:
             os.environ.setdefault("TRITON_CACHE_DIR", os.path.expanduser("~/.triton/cache"))
             os.environ.setdefault("TORCHINDUCTOR_CACHE_DIR", os.path.expanduser("~/.cache/torchinductor"))
             torch._dynamo.config.cache_size_limit = 1024
@@ -83,7 +87,7 @@ class BatchEngine(NaiveEngine):
         self.host_buf = torch.zeros((S,), dtype=torch.long, pin_memory=True)
         self.force_dev = torch.zeros((2, S), dtype=torch.long, device=dev)  # [token, on] per row, read in-graph
         self.force_host = torch.zeros((2, S), dtype=torch.long, pin_memory=True)
-        self.event = torch.cuda.Event()
+        self.event = None if self.npu_eager else torch.cuda.Event()
         self.cache = SlotCache(self.model.config, S, max_len, self.pos_buf)
         if state_dtype:  # storage dtype of the Gated-DeltaNet recurrent states (HF/fla produce fp32)
             self.cache.state_dtype = {"bf16": torch.bfloat16, "fp32": torch.float32}[state_dtype]
@@ -107,12 +111,24 @@ class BatchEngine(NaiveEngine):
         self.owner = list(range(S))  # physical row -> logical slot
         self.reset_stats()
         t0 = time.perf_counter()
-        self._capture()
-        print(f"batch decode graphs (S={S}, buckets {self.buckets}) captured in {time.perf_counter() - t0:.1f}s, "
-              f"cache {self.cache.memory_bytes() / 2**30:.1f} GiB", flush=True)
+        if self.npu_eager:
+            # Warm only the rows that actually exist.  The previous fixed
+            # 16-row probe made small-slot runs touch inactive rows and could
+            # overflow the configured cache during initialization.
+            self.prefill(0, list(range(min(16, S))))
+            self.release(0)
+            self.graphs = {}
+            print(f"NPU eager batch initialized (S={S}, buckets {self.buckets}), "
+                  f"cache {self.cache.memory_bytes() / 2**30:.1f} GiB", flush=True)
+        else:
+            self._capture()
+            print(f"batch decode graphs (S={S}, buckets {self.buckets}) captured in {time.perf_counter() - t0:.1f}s, "
+                  f"cache {self.cache.memory_bytes() / 2**30:.1f} GiB", flush=True)
 
     def _step(self, B: int):
         """One decode step for rows [0, B)."""
+        # Keep recurrent-state views aligned with the active compact bucket.
+        self.cache.set_rows(B)
         mask, pos = self.mask_buf[:B], self.pos_buf[:B]
         mask.view(B, self.max_len).index_put_((self.rows[:B], pos), self.trues[:B])
         tok = torch.where(self.force_dev[1, :B].view(-1, 1) > 0, self.force_dev[0, :B].view(-1, 1), self.tok_buf[:B])
@@ -299,11 +315,18 @@ class BatchEngine(NaiveEngine):
                 r = self.row[s]
                 self.force_host[0, r], self.force_host[1, r] = self.force_q[s][0], 1
             self.force_dev.copy_(self.force_host, non_blocking=True)  # host buffer reused only after the sync
-        self.graphs[B].replay()
-        self.host_buf.copy_(self.out_buf, non_blocking=True)
-        self.event.record()
-        self.event.synchronize()
-        out = self.host_buf.tolist()
+        if self.npu_eager:
+            self._step(B)
+        else:
+            self.graphs[B].replay()
+        if self.npu_eager:
+            torch.npu.synchronize()
+            out = self.out_buf.cpu().tolist()
+        else:
+            self.host_buf.copy_(self.out_buf, non_blocking=True)
+            self.event.record()
+            self.event.synchronize()
+            out = self.host_buf.tolist()
         self.trace.append((t0, time.perf_counter(), B, len(self.live), len(forcing)))
         self.stats["decode_steps"] += 1
         self.stats["live_row_steps"] += len(self.live)

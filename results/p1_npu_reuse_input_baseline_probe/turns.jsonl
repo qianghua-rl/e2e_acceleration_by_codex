@@ -1,0 +1,2 @@
+{"task_id": 23, "turn": 1, "prompt_len": 401, "gen_len": 64, "prefill_s": 0.8362583238631487, "decode_s": 10.141490598209202, "tool_s": 0.0, "stopped": false}
+{"task_id": 51, "turn": 1, "prompt_len": 410, "gen_len": 64, "prefill_s": 0.8629304422065616, "decode_s": 10.196364004164934, "tool_s": 0.0, "stopped": false}

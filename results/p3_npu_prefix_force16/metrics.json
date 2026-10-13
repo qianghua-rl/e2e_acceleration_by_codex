@@ -1,0 +1,100 @@
+{
+  "stage": "p3_npu_prefix_force16",
+  "engine": "p3_npu_prefix_force16",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true,
+    "static_cache": false,
+    "allow_internal_format": false,
+    "mm_bmm_format_nd": null,
+    "num_slots": 16,
+    "max_len": 2048,
+    "compile_decode": false,
+    "gqa_decode_attn": false,
+    "prefix_reuse": true,
+    "force_max": 128,
+    "inplace_state": false,
+    "fp8": null,
+    "buckets": null,
+    "state_dtype": null,
+    "recurrent_launch": null
+  },
+  "runner": "continuous_async",
+  "config": {
+    "engine": "p3_npu_prefix_force16",
+    "runner": "continuous_async",
+    "num_tasks": 16,
+    "data": "gsm8k_128",
+    "exclude_tasks": [
+      423
+    ],
+    "repeats": 1,
+    "max_new_tokens": 256,
+    "max_turns": 6,
+    "device": "npu",
+    "replay": null
+  },
+  "load_s": 31.547341362573206,
+  "makespan_s_all": [
+    78.34316759929061
+  ],
+  "makespan_s": 78.34316759929061,
+  "tasks": 16,
+  "accuracy": 0.9375,
+  "tasks_per_min": 12.253780762480845,
+  "turns": 31,
+  "tool_calls": 15,
+  "gen_tokens": 2379,
+  "prompt_tokens": 14955,
+  "redundant_prefill_tokens": 7988,
+  "gen_tok_per_s_e2e": 30.366400452022848,
+  "decode_ms_per_token": 32.23020322478076,
+  "prefill_tok_per_s": 9150.379654024542,
+  "task_latency_p50_s": 55.00720265787095,
+  "task_latency_p90_s": 76.03857943695039,
+  "finish_reasons": {
+    "answer": 15,
+    "no_answer": 1
+  },
+  "engine_stats": {
+    "prefill_calls": 3,
+    "prefill_tokens": 943,
+    "reused_turn": 6744,
+    "reused_shared": 6336,
+    "forced_tokens": 1284,
+    "decode_steps": 326,
+    "live_row_steps": 3662,
+    "computed_row_steps": 5216,
+    "row_swaps": 0
+  },
+  "peak_mem_gb": null,
+  "env": {
+    "host": "1c91821700b6",
+    "slurm_job_id": null,
+    "gpu": null,
+    "torch": "2.9.1+cpu",
+    "transformers": "5.5.4",
+    "git_commit": "c4435bde4fd3adb80b8a44367203c997aa84a684",
+    "snapshot": false,
+    "git_dirty": true,
+    "argv": [
+      "bench/run_bench.py",
+      "--stage",
+      "p3_npu_prefix_force16",
+      "--engine",
+      "p3_npu_prefix_force16",
+      "--runner",
+      "continuous_async",
+      "--num-tasks",
+      "16",
+      "--exclude-tasks",
+      "423",
+      "--max-new-tokens",
+      "256",
+      "--max-turns",
+      "6",
+      "--device",
+      "npu"
+    ]
+  }
+}

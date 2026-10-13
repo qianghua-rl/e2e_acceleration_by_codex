@@ -1,0 +1,100 @@
+{
+  "stage": "p3_npu_final127_prefix16",
+  "engine": "p3_npu_prefix16",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true,
+    "static_cache": false,
+    "allow_internal_format": false,
+    "mm_bmm_format_nd": null,
+    "num_slots": 16,
+    "max_len": 2048,
+    "compile_decode": false,
+    "gqa_decode_attn": false,
+    "prefix_reuse": true,
+    "force_max": 0,
+    "inplace_state": false,
+    "fp8": null,
+    "buckets": null,
+    "state_dtype": null,
+    "recurrent_launch": null
+  },
+  "runner": "continuous_async",
+  "config": {
+    "engine": "p3_npu_prefix16",
+    "runner": "continuous_async",
+    "num_tasks": 127,
+    "data": "gsm8k_128",
+    "exclude_tasks": [
+      423
+    ],
+    "repeats": 1,
+    "max_new_tokens": 512,
+    "max_turns": 6,
+    "device": "npu",
+    "replay": null
+  },
+  "load_s": 30.033101103268564,
+  "makespan_s_all": [
+    559.1624624719843
+  ],
+  "makespan_s": 559.1624624719843,
+  "tasks": 127,
+  "accuracy": 0.9448818897637795,
+  "tasks_per_min": 13.62752421954967,
+  "turns": 253,
+  "tool_calls": 126,
+  "gen_tokens": 19944,
+  "prompt_tokens": 125872,
+  "redundant_prefill_tokens": 69091,
+  "gen_tok_per_s_e2e": 35.66763031951425,
+  "decode_ms_per_token": 17.609221782064427,
+  "prefill_tok_per_s": 599.3235102038674,
+  "task_latency_p50_s": 55.24214878119528,
+  "task_latency_p90_s": 101.08639288600534,
+  "finish_reasons": {
+    "answer": 125,
+    "no_answer": 2
+  },
+  "engine_stats": {
+    "prefill_calls": 254,
+    "prefill_tokens": 13354,
+    "reused_turn": 66758,
+    "reused_shared": 46112,
+    "forced_tokens": 0,
+    "decode_steps": 1426,
+    "live_row_steps": 19943,
+    "computed_row_steps": 22816,
+    "row_swaps": 0
+  },
+  "peak_mem_gb": null,
+  "env": {
+    "host": "1c91821700b6",
+    "slurm_job_id": null,
+    "gpu": null,
+    "torch": "2.9.1+cpu",
+    "transformers": "5.5.4",
+    "git_commit": "c4435bde4fd3adb80b8a44367203c997aa84a684",
+    "snapshot": false,
+    "git_dirty": true,
+    "argv": [
+      "bench/run_bench.py",
+      "--stage",
+      "p3_npu_final127_prefix16",
+      "--engine",
+      "p3_npu_prefix16",
+      "--runner",
+      "continuous_async",
+      "--num-tasks",
+      "127",
+      "--exclude-tasks",
+      "423",
+      "--max-new-tokens",
+      "512",
+      "--max-turns",
+      "6",
+      "--device",
+      "npu"
+    ]
+  }
+}

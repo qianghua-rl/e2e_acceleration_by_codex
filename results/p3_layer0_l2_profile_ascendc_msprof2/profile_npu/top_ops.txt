@@ -1,0 +1,1 @@
+torch_npu profiler has no key_averages; inspect trace/

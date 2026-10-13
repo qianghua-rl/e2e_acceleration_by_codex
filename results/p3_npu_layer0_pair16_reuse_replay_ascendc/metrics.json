@@ -1,0 +1,79 @@
+{
+  "stage": "p3_npu_layer0_pair16_reuse_replay_ascendc",
+  "engine": "p3_npu_ascendc_layer0",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true,
+    "static_cache": false,
+    "allow_internal_format": false,
+    "mm_bmm_format_nd": null,
+    "ascendc_conv_layer": 0
+  },
+  "runner": "serial",
+  "config": {
+    "engine": "p3_npu_ascendc_layer0",
+    "runner": "serial",
+    "num_tasks": 16,
+    "data": "gsm8k_128",
+    "exclude_tasks": [
+      423
+    ],
+    "repeats": 1,
+    "max_new_tokens": 256,
+    "max_turns": 6,
+    "device": "npu",
+    "replay": "e2e_acceleration_by_claude/results/p3_npu_layer0_pair16_reuse_baseline"
+  },
+  "load_s": 29.162203633226454,
+  "makespan_s_all": [
+    413.95230724290013
+  ],
+  "makespan_s": 413.95230724290013,
+  "tasks": 16,
+  "accuracy": 0.9375,
+  "tasks_per_min": 2.3191077406815572,
+  "turns": 31,
+  "tool_calls": 15,
+  "gen_tokens": 2329,
+  "prompt_tokens": 14962,
+  "redundant_prefill_tokens": 7995,
+  "gen_tok_per_s_e2e": 5.626252008382653,
+  "decode_ms_per_token": 167.81163901200856,
+  "prefill_tok_per_s": 541.8690702751405,
+  "task_latency_p50_s": 29.2333957683295,
+  "task_latency_p90_s": 39.14745745528489,
+  "finish_reasons": {
+    "answer": 15,
+    "no_answer": 1
+  },
+  "peak_mem_gb": null,
+  "env": {
+    "host": "1c91821700b6",
+    "slurm_job_id": null,
+    "gpu": null,
+    "torch": "2.9.1+cpu",
+    "transformers": "5.5.4",
+    "git_commit": "c4435bde4fd3adb80b8a44367203c997aa84a684",
+    "snapshot": false,
+    "git_dirty": true,
+    "argv": [
+      "e2e_acceleration_by_claude/bench/run_bench.py",
+      "--stage",
+      "p3_npu_layer0_pair16_reuse_replay_ascendc",
+      "--engine",
+      "p3_npu_ascendc_layer0",
+      "--runner",
+      "serial",
+      "--num-tasks",
+      "16",
+      "--exclude-tasks",
+      "423",
+      "--max-new-tokens",
+      "256",
+      "--max-turns",
+      "6",
+      "--replay",
+      "e2e_acceleration_by_claude/results/p3_npu_layer0_pair16_reuse_baseline"
+    ]
+  }
+}

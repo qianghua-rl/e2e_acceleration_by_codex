@@ -1,0 +1,78 @@
+{
+  "stage": "p1_npu_mm_nd8",
+  "engine": "p1_npu_mm_nd",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true,
+    "static_cache": true,
+    "allow_internal_format": false,
+    "mm_bmm_format_nd": true
+  },
+  "runner": "serial",
+  "config": {
+    "engine": "p1_npu_mm_nd",
+    "runner": "serial",
+    "num_tasks": 8,
+    "data": "gsm8k_128",
+    "exclude_tasks": [
+      423
+    ],
+    "repeats": 1,
+    "max_new_tokens": 128,
+    "max_turns": 6,
+    "device": "npu",
+    "replay": null
+  },
+  "load_s": 35.54206776525825,
+  "makespan_s_all": [
+    177.8692762227729
+  ],
+  "makespan_s": 177.8692762227729,
+  "tasks": 8,
+  "accuracy": 0.5,
+  "tasks_per_min": 2.6986110822131115,
+  "turns": 12,
+  "tool_calls": 4,
+  "gen_tokens": 996,
+  "prompt_tokens": 5367,
+  "redundant_prefill_tokens": 1957,
+  "gen_tok_per_s_e2e": 5.599617995592206,
+  "decode_ms_per_token": 169.79452424750824,
+  "prefill_tok_per_s": 507.7208974577136,
+  "task_latency_p50_s": 22.486238779500127,
+  "task_latency_p90_s": 29.479029250331223,
+  "finish_reasons": {
+    "no_answer": 4,
+    "answer": 4
+  },
+  "peak_mem_gb": null,
+  "env": {
+    "host": "1c91821700b6",
+    "slurm_job_id": null,
+    "gpu": null,
+    "torch": "2.9.1+cpu",
+    "transformers": "5.5.4",
+    "git_commit": "c4435bde4fd3adb80b8a44367203c997aa84a684",
+    "snapshot": false,
+    "git_dirty": true,
+    "argv": [
+      "bench/run_bench.py",
+      "--stage",
+      "p1_npu_mm_nd8",
+      "--engine",
+      "p1_npu_mm_nd",
+      "--runner",
+      "serial",
+      "--num-tasks",
+      "8",
+      "--exclude-tasks",
+      "423",
+      "--max-new-tokens",
+      "128",
+      "--max-turns",
+      "6",
+      "--device",
+      "npu"
+    ]
+  }
+}

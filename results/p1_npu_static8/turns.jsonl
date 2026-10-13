@@ -1,0 +1,12 @@
+{"task_id": 23, "turn": 1, "prompt_len": 401, "gen_len": 107, "prefill_s": 0.8572135157883167, "decode_s": 18.20933278556913, "tool_s": 0.043313635513186455, "stopped": true}
+{"task_id": 23, "turn": 2, "prompt_len": 527, "gen_len": 59, "prefill_s": 0.885056578554213, "decode_s": 9.990963488817215, "tool_s": 0.0, "stopped": true}
+{"task_id": 51, "turn": 1, "prompt_len": 410, "gen_len": 85, "prefill_s": 0.8234325600787997, "decode_s": 14.083504206500947, "tool_s": 0.04152263421565294, "stopped": true}
+{"task_id": 51, "turn": 2, "prompt_len": 516, "gen_len": 66, "prefill_s": 0.888579017482698, "decode_s": 10.902410003356636, "tool_s": 0.0, "stopped": true}
+{"task_id": 68, "turn": 1, "prompt_len": 398, "gen_len": 64, "prefill_s": 0.8495620610192418, "decode_s": 10.526240834966302, "tool_s": 0.04055819381028414, "stopped": true}
+{"task_id": 68, "turn": 2, "prompt_len": 484, "gen_len": 6, "prefill_s": 0.8670617397874594, "decode_s": 0.9882288482040167, "tool_s": 0.0, "stopped": true}
+{"task_id": 76, "turn": 1, "prompt_len": 447, "gen_len": 128, "prefill_s": 0.8201306723058224, "decode_s": 21.314884099178016, "tool_s": 0.0, "stopped": false}
+{"task_id": 84, "turn": 1, "prompt_len": 385, "gen_len": 128, "prefill_s": 0.8249742137268186, "decode_s": 20.58963568881154, "tool_s": 0.0, "stopped": false}
+{"task_id": 99, "turn": 1, "prompt_len": 443, "gen_len": 128, "prefill_s": 0.9149076286703348, "decode_s": 20.69542809855193, "tool_s": 0.0, "stopped": false}
+{"task_id": 108, "turn": 1, "prompt_len": 441, "gen_len": 128, "prefill_s": 0.8137526856735349, "decode_s": 20.690170854330063, "tool_s": 0.0, "stopped": false}
+{"task_id": 120, "turn": 1, "prompt_len": 402, "gen_len": 90, "prefill_s": 0.8566030161455274, "decode_s": 14.67820312269032, "tool_s": 0.03978703077882528, "stopped": true}
+{"task_id": 120, "turn": 2, "prompt_len": 513, "gen_len": 7, "prefill_s": 0.8762618964537978, "decode_s": 1.3543712617829442, "tool_s": 0.0, "stopped": true}

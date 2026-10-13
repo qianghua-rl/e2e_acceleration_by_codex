@@ -1,0 +1,58 @@
+engine loaded in 28.2s
+[rep 0] makespan=97.5s acc=0.125 gen_tok=518 decode=174.67ms/tok
+{
+  "stage": "p3_npu_layer0_pair8_reuse_baseline",
+  "engine": "naive",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true,
+    "static_cache": false,
+    "allow_internal_format": false,
+    "mm_bmm_format_nd": null
+  },
+  "runner": "serial",
+  "config": {
+    "engine": "naive",
+    "runner": "serial",
+    "num_tasks": 8,
+    "data": "gsm8k_128",
+    "exclude_tasks": [
+      423
+    ],
+    "repeats": 1,
+    "max_new_tokens": 64,
+    "max_turns": 2,
+    "device": "npu",
+    "replay": null
+  },
+  "load_s": 28.173218148760498,
+  "makespan_s_all": [
+    97.50487864762545
+  ],
+  "makespan_s": 97.50487864762545,
+  "tasks": 8,
+  "accuracy": 0.125,
+  "tasks_per_min": 4.9228305973763655,
+  "turns": 9,
+  "tool_calls": 1,
+  "gen_tokens": 518,
+  "prompt_tokens": 3811,
+  "redundant_prefill_tokens": 462,
+  "gen_tok_per_s_e2e": 5.312554686335328,
+  "decode_ms_per_token": 174.66595645057137,
+  "prefill_tok_per_s": 447.19055756204176,
+  "task_latency_p50_s": 12.097563258372247,
+  "task_latency_p90_s": 13.518964641727507,
+  "finish_reasons": {
+    "answer": 1,
+    "no_answer": 7
+  },
+  "peak_mem_gb": null
+}
+breakdown (median rep):
+  decode           88.90s   91.2%  n=9
+  prefill           8.52s    8.7%  n=9
+  tool              0.04s    0.0%  n=1
+  template          0.03s    0.0%  n=9
+  other             0.01s    0.0%  n=0
+  detokenize        0.00s    0.0%  n=9

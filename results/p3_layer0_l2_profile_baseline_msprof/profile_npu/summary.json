@@ -1,0 +1,37 @@
+{
+  "tasks": 1,
+  "wall_s": 80.49190524127334,
+  "turns": 1,
+  "gen_tokens": 16,
+  "breakdown": {
+    "other": {
+      "seconds": 75.89456006418914,
+      "count": 0,
+      "frac": 0.9428843787048682
+    },
+    "decode": {
+      "seconds": 3.4397395299747586,
+      "count": 1,
+      "frac": 0.04273398076072604
+    },
+    "prefill": {
+      "seconds": 1.154966871254146,
+      "count": 1,
+      "frac": 0.01434885741357655
+    },
+    "template": {
+      "seconds": 0.0024612266570329666,
+      "count": 1,
+      "frac": 3.057731891990225e-05
+    },
+    "detokenize": {
+      "seconds": 0.00017754919826984406,
+      "count": 1,
+      "frac": 2.2058019093676917e-06
+    }
+  },
+  "engine": "naive",
+  "max_new_tokens": 16,
+  "profiler_error": "AttributeError(\"'profile' object has no attribute 'key_averages'\")",
+  "trace_dir": "/remote-home/S45160/work/e2e_acceleration_by_claude/results/p3_layer0_l2_profile_baseline_msprof/profile_npu/trace"
+}

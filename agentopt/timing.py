@@ -10,6 +10,7 @@ import time
 import torch
 
 _CUDA = torch.cuda.is_available()
+_NPU = hasattr(torch, "npu") and torch.npu.is_available()
 
 
 class Section:
@@ -22,7 +23,7 @@ class Section:
 class Timer:
     def __init__(self, sync: bool = True):
         # sync=True makes GPU sections honest (wait for queued kernels before stopping the clock).
-        self.sync = sync and _CUDA
+        self.sync = sync and (_CUDA or _NPU)
         self.totals = collections.defaultdict(float)
         self.counts = collections.defaultdict(int)
 
@@ -36,7 +37,10 @@ class Timer:
             yield sec
         finally:
             if self.sync:
-                torch.cuda.synchronize()
+                if _CUDA:
+                    torch.cuda.synchronize()
+                elif _NPU:
+                    torch.npu.synchronize()
             sec.elapsed = time.perf_counter() - t0
             self.totals[name] += sec.elapsed
             self.counts[name] += 1

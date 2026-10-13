@@ -44,6 +44,8 @@ class SlotCache:
         self.pos = pos  # (S,) device tensor owned by the engine: decode write position of every row
         self.rows = torch.arange(num_slots, device=pos.device)
         self.B = num_slots  # decode rows (graph bucket being captured)
+        # Multimodal Qwen3.5 stores language-layer fields in text_config.
+        config = getattr(config, "text_config", config)
         self.layer_types = config.layer_types
         self.attn_idx = [i for i, t in enumerate(self.layer_types) if t != "linear_attention"]
         self.lin_idx = [i for i, t in enumerate(self.layer_types) if t == "linear_attention"]

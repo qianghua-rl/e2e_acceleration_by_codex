@@ -111,7 +111,7 @@ def main():
     ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--max-new-tokens", type=int, default=512)
     ap.add_argument("--max-turns", type=int, default=6)
-    ap.add_argument("--device", default="cuda")
+    ap.add_argument("--device", default="npu")
     ap.add_argument("--out", default=None, help="default: results/<stage>")
     ap.add_argument("--replay", default=None, help="results dir: force its generated tokens (timing A/Bs that "
                     "follow one trajectory whatever the numerics; v3 runner; accuracy is then that run's)")

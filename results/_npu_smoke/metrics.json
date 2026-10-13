@@ -1,0 +1,70 @@
+{
+  "stage": "_npu_smoke",
+  "engine": "naive",
+  "engine_options": {
+    "linear_attn_fast_path": false,
+    "cudnn_sdpa": true
+  },
+  "runner": "serial",
+  "config": {
+    "engine": "naive",
+    "runner": "serial",
+    "num_tasks": 2,
+    "data": "gsm8k_128",
+    "exclude_tasks": [],
+    "repeats": 1,
+    "max_new_tokens": 32,
+    "max_turns": 2,
+    "device": "npu",
+    "replay": null
+  },
+  "load_s": 34.70427454030141,
+  "makespan_s_all": [
+    13.454185298644006
+  ],
+  "makespan_s": 13.454185298644006,
+  "tasks": 2,
+  "accuracy": 0.0,
+  "tasks_per_min": 8.919157669999857,
+  "turns": 2,
+  "tool_calls": 0,
+  "gen_tokens": 64,
+  "prompt_tokens": 811,
+  "redundant_prefill_tokens": 0,
+  "gen_tok_per_s_e2e": 4.75688409066659,
+  "decode_ms_per_token": 185.734627843504,
+  "prefill_tok_per_s": 421.23994100586236,
+  "task_latency_p50_s": 6.8999510682187974,
+  "task_latency_p90_s": 6.8999510682187974,
+  "finish_reasons": {
+    "no_answer": 2
+  },
+  "peak_mem_gb": null,
+  "env": {
+    "host": "1c91821700b6",
+    "slurm_job_id": null,
+    "gpu": null,
+    "torch": "2.9.1+cpu",
+    "transformers": "5.5.4",
+    "git_commit": "c4435bde4fd3adb80b8a44367203c997aa84a684",
+    "snapshot": false,
+    "git_dirty": true,
+    "argv": [
+      "bench/run_bench.py",
+      "--stage",
+      "_npu_smoke",
+      "--engine",
+      "naive",
+      "--runner",
+      "serial",
+      "--num-tasks",
+      "2",
+      "--max-new-tokens",
+      "32",
+      "--max-turns",
+      "2",
+      "--device",
+      "npu"
+    ]
+  }
+}

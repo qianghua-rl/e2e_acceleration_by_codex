@@ -1,0 +1,25 @@
+{
+  "makespan_s": 656.3671658448875,
+  "steps": 1400,
+  "parts": {
+    "inside step()": 343.11420738045126,
+    "between steps (host)": 0.7504112273454666,
+    "long gaps >50 ms (no live row / stalls)": 299.0636371765286,
+    "before first step": 13.43735158443451,
+    "after last step": 0.0015584761276841164
+  },
+  "per_bucket": {
+    "16": {
+      "steps": 1400,
+      "wall_s": 343.11420738045126,
+      "ms_per_step": 245.08157670032233,
+      "replay_ms": null,
+      "fill": 0.8829910714285715
+    }
+  },
+  "forced_row_steps": 0,
+  "live_row_steps": 19779,
+  "critical_task": 428,
+  "critical_start_s": 350.80170717742294,
+  "critical_latency_s": 305.56545866746455
+}
